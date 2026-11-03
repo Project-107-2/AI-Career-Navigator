@@ -18,3 +18,5 @@ classpath:/Users/alpoval/.m2/repository/org/eclipse/jetty/websocket/websocket-se
 classpath:/Users/alpoval/.m2/repository/org/eclipse/jetty/websocket/websocket-api/9.4.48.v20220622/websocket-api-9.4.48.v20220622.jar	52173:1655844446000
 classpath:/Users/alpoval/.m2/repository/com/google/code/gson/gson/2.13.1/gson-2.13.1.jar	286972:1745456720000
 classpath:/Users/alpoval/.m2/repository/com/google/errorprone/error_prone_annotations/2.38.0/error_prone_annotations-2.38.0.jar	20389:1744993594000
+classpath:/Users/alpoval/.m2/repository/org/mindrot/jbcrypt/0.4/jbcrypt-0.4.jar	17429:1487010211000
+classpath:/Users/alpoval/.m2/repository/io/jsonwebtoken/jjwt-api/0.12.6/jjwt-api-0.12.6.jar	140285:1718999590000

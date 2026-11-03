@@ -105,6 +105,13 @@ public class Main {
       response.type("application/json");
       return gson.toJson(Map.of("skills", skills));
     });
+    before("/profile", (request, response) -> { //пока только проверка наличия заголовка
+      String authHeader = request.headers("Authorization");
+
+      if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        halt(401, "{\"message\":\"Unauthorized\"}");
+      }
+    });
     get("/profile", (request, response) -> {
       response.type("application/json");
       return gson.toJson(profile);
