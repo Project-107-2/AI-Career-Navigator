@@ -1,5 +1,13 @@
-org/career/navigator/RegisterRequest.class
-org/career/navigator/User.class
+org/career/navigator/model/MissingSkill.class
 org/career/navigator/JWTService.class
 org/career/navigator/LoginRequest.class
+org/career/navigator/User.class
 org/career/navigator/Main.class
+org/career/navigator/service/MatchService.class
+org/career/navigator/model/MatchResult.class
+org/career/navigator/model/SkillTestResult.class
+org/career/navigator/RegisterRequest.class
+org/career/navigator/model/UserSkillAssessment.class
+org/career/navigator/model/RoleSkill.class
+org/career/navigator/model/Skill.class
+org/career/navigator/model/Role.class

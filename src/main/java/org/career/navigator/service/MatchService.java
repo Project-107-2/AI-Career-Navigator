@@ -1,64 +1,99 @@
 package org.career.navigator.service;
 
-import org.career.navigator.model.Role;
-import org.career.navigator.model.RoleSkill;
-import org.career.navigator.model.UserSkillAssessment;
-import org.career.navigator.model.SkillTestResult;
+import org.career.navigator.model.*;
 
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 
 public class MatchService {
 
-  public double calculateMatch(
+  public MatchResult calculateMatch(
+    Long userId,
     Role role,
     List<UserSkillAssessment> assessments,
     List<SkillTestResult> testResults
   ) {
     Map<Long, Integer> userLevels = new HashMap<>();
 
+    // Самооценка пользователя
     for (UserSkillAssessment assessment : assessments) {
+      if (!userId.equals(assessment.getUserId())) {
+        continue;
+      }
+
       userLevels.put(
         assessment.getSkill().getId(),
         assessment.getLevel()
       );
     }
 
+    // Лучший подтверждённый уровень по результатам тестов
+    Map<Long, Integer> testedLevels = new HashMap<>();
+
     for (SkillTestResult result : testResults) {
-      if (result.isPassed()) {
-        Long skillId = result.getSkill().getId();
-
-        int selfAssessedLevel = userLevels.getOrDefault(
-          skillId,
-          result.getConfirmedLevel()
-        );
-
-        userLevels.put(
-          skillId,
-          Math.min(selfAssessedLevel, result.getConfirmedLevel())
-        );
+      if (!userId.equals(result.getUserId()) || !result.isPassed()) {
+        continue;
       }
+
+      Long skillId = result.getSkill().getId();
+
+      testedLevels.merge(
+        skillId,
+        result.getConfirmedLevel(),
+        Math::max
+      );
+    }
+
+    // Сопоставляем самооценку и тесты
+    for (Map.Entry<Long, Integer> entry : testedLevels.entrySet()) {
+      Long skillId = entry.getKey();
+      int testedLevel = entry.getValue();
+
+      int selfLevel = userLevels.getOrDefault(
+        skillId,
+        testedLevel
+      );
+
+      userLevels.put(
+        skillId,
+        Math.min(selfLevel, testedLevel)
+      );
     }
 
     int totalRequired = 0;
     int totalAchieved = 0;
 
+    List<MissingSkill> missingSkills = new ArrayList<>();
+
+    // Рассчитываем соответствие роли
     for (RoleSkill roleSkill : role.getSkills()) {
       int required = roleSkill.getRequiredLevel();
+      Long skillId = roleSkill.getSkill().getId();
 
-      int actual = userLevels.getOrDefault(
-        roleSkill.getSkill().getId(), 0
-      );
+      int actual = userLevels.getOrDefault(skillId, 0);
 
       totalRequired += required;
       totalAchieved += Math.min(actual, required);
+
+      if (actual < required) {
+        missingSkills.add(
+          new MissingSkill(
+            skillId,
+            roleSkill.getSkill().getName(),
+            actual,
+            required
+          )
+        );
+      }
     }
 
-    if (totalRequired == 0) {
-      return 0.0;
-    }
+    double percentage = totalRequired == 0
+      ? 0.0
+      : (double) totalAchieved / totalRequired * 100;
 
-    return (double) totalAchieved / totalRequired * 100;
+    return new MatchResult(
+      role.getId(),
+      percentage,
+      missingSkills
+    );
   }
 }
