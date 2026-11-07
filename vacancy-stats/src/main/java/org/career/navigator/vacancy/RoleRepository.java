@@ -1,3 +1,7 @@
+package org.career.navigator.vacancy;
+
+import org.career.navigator.model.Role;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -10,7 +14,7 @@ public class RoleRepository {
     }
 
     public void add(Role role) {
-        roles.put(role.id(), role);
+        roles.put(role.getId(), role);
     }
 
     /** null, если роли нет. */

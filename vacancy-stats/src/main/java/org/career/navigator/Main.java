@@ -1,4 +1,12 @@
+package org.career.navigator;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.career.navigator.model.Role;
+import org.career.navigator.vacancy.RoleRepository;
+import org.career.navigator.vacancy.SkillCatalog;
+import org.career.navigator.vacancy.StatsService;
+import org.career.navigator.vacancy.TrudvsemClient;
+import org.career.navigator.vacancy.Vacancy;
 
 import java.util.HashMap;
 import java.util.List;
@@ -43,7 +51,7 @@ public class Main {
             }
 
             if (!cache.containsKey(id)) {
-                cache.put(id, client.search(role.name(), 100));
+                cache.put(id, client.search(role.getName(), 100));
             }
             return json.writeValueAsString(stats.compute(role, cache.get(id)));
         });

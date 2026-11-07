@@ -1,4 +1,9 @@
+package org.career.navigator.vacancy;
+
+import org.career.navigator.model.Skill;
+
 import java.util.ArrayList;
+
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -35,7 +40,7 @@ public class SkillCatalog {
         if (text == null) return found;
         for (Skill s : skills) {
             // слово целиком: "Java" не должна находиться внутри "JavaScript"
-            String regex = "(?<![\\p{L}\\p{N}])" + Pattern.quote(s.name()) + "(?![\\p{L}\\p{N}])";
+            String regex = "(?<![\\p{L}\\p{N}])" + Pattern.quote(s.getName()) + "(?![\\p{L}\\p{N}])";
             if (Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher(text).find()) {
                 found.add(s);
             }

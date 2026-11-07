@@ -1,3 +1,7 @@
+package org.career.navigator.vacancy;
+
+import org.career.navigator.model.Skill;
+
 import java.util.List;
 
 /**

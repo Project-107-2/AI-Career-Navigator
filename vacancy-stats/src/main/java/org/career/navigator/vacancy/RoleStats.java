@@ -1,3 +1,5 @@
+package org.career.navigator.vacancy;
+
 import java.util.List;
 
 /** Ответ GET /roles/{id}/stats. Формат согласован с Алёной. */

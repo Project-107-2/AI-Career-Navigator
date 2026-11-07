@@ -1,3 +1,8 @@
+package org.career.navigator.vacancy;
+
+import org.career.navigator.model.Role;
+import org.career.navigator.model.Skill;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -16,7 +21,7 @@ public class StatsService {
         }
 
         return new RoleStats(
-                role.id(),
+                role.getId(),
                 vacancies.size(),
                 medianSalary(vacancies),
                 "RUR",
@@ -36,7 +41,7 @@ public class StatsService {
         List<SkillCount> result = new ArrayList<>();
         for (Map.Entry<Skill, Integer> e : counts.entrySet()) {
             double share = (double) e.getValue() / vacancies.size();
-            result.add(new SkillCount(e.getKey().id(), e.getKey().name(), e.getValue(), share));
+            result.add(new SkillCount(e.getKey().getId(), e.getKey().getName(), e.getValue(), share));
         }
         result.sort(Comparator.comparingInt(SkillCount::count).reversed());
         return result;
