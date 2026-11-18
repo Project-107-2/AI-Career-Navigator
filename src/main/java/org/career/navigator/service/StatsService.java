@@ -1,4 +1,7 @@
-package org.career.navigator.vacancy;
+package org.career.navigator.service;
+import org.career.navigator.model.Vacancy;
+import org.career.navigator.dto.SkillCount;
+import org.career.navigator.dto.RoleStats;
 
 import org.career.navigator.model.Role;
 import org.career.navigator.model.Skill;

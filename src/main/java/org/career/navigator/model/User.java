@@ -1,4 +1,4 @@
-package org.career.navigator;
+package org.career.navigator.model;
 
 public class User {
     public String name;

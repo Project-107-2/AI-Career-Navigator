@@ -1,4 +1,4 @@
-package org.career.navigator.vacancy;
+package org.career.navigator.repository;
 
 import org.career.navigator.model.Role;
 

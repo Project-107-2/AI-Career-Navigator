@@ -1,3 +1,6 @@
+package org.career.navigator.service;
+import org.career.navigator.dto.*;
+
 import org.career.navigator.model.*;
 import org.career.navigator.service.MatchService;
 import org.junit.jupiter.api.Test;

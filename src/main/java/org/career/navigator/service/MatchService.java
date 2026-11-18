@@ -1,4 +1,5 @@
 package org.career.navigator.service;
+import org.career.navigator.dto.*;
 
 import org.career.navigator.model.*;
 

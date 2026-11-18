@@ -1,4 +1,4 @@
-package org.career.navigator;
+package org.career.navigator.security;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;

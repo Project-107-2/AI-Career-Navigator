@@ -1,4 +1,6 @@
-package org.career.navigator.vacancy;
+package org.career.navigator.integration;
+import org.career.navigator.repository.SkillCatalog;
+import org.career.navigator.model.Vacancy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
