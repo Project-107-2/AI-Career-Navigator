@@ -1,4 +1,4 @@
-package org.career.navigator;
+package org.career.navigator.dto;
 
 public class LoginRequest {
   public String email;

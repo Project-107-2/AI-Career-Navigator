@@ -1,4 +1,4 @@
-package org.career.navigator.vacancy;
+package org.career.navigator.model;
 
 import org.career.navigator.model.Skill;
 
