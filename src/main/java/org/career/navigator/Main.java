@@ -1,4 +1,5 @@
 package org.career.navigator;
+import org.career.navigator.repository.PostgresUserRepository;
 import org.career.navigator.integration.TrudvsemClient;
 import org.career.navigator.service.StatsService;
 import org.career.navigator.repository.SkillCatalog;
@@ -24,8 +25,19 @@ import static spark.Spark.*;
 
 public class Main {
 
-    private static final UserRepository users =
-            new InMemoryUserRepository();
+    private static final UserRepository users = createUserRepository();
+
+    /** Если задана переменная окружения DB_URL — PostgreSQL, иначе хранение в памяти. */
+    private static UserRepository createUserRepository() {
+        String url = System.getenv("DB_URL");
+        if (url == null || url.isBlank()) {
+            System.out.println("DB_URL не задан: пользователи хранятся в памяти");
+            return new InMemoryUserRepository();
+        }
+        System.out.println("Пользователи хранятся в PostgreSQL: " + url);
+        return new PostgresUserRepository(url, System.getenv("DB_USER"), System.getenv("DB_PASSWORD"));
+    }
+
 
     private static final JWTService jwtService =
             new JWTService();
