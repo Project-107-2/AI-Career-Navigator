@@ -3,3 +3,11 @@
 /Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/Main.java
 /Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/RegisterRequest.java
 /Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/User.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/MatchResult.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/MissingSkill.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/Role.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/RoleSkill.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/Skill.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/SkillTestResult.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/model/UserSkillAssessment.java
+/Users/alpoval/AI-Career-Navigator/src/main/java/org/career/navigator/service/MatchService.java
