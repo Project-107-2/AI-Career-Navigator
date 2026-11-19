@@ -1,5 +1,7 @@
 package org.career.navigator.model;
 
+import java.util.Objects;
+
 public class Skill {
   private Long id;
   private String name;
@@ -33,5 +35,17 @@ public class Skill {
 
   public void setDescription(String description) {
     this.description = description;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (!(o instanceof Skill skill)) return false;
+    return Objects.equals(id, skill.id);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(id);
   }
 }

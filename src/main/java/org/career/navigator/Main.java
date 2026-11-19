@@ -1,12 +1,5 @@
 package org.career.navigator;
-import org.career.navigator.integration.TrudvsemClient;
-import org.career.navigator.service.StatsService;
-import org.career.navigator.repository.SkillCatalog;
-import org.career.navigator.repository.RoleRepository;
-import org.career.navigator.model.Vacancy;
-import org.career.navigator.model.Role;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.List;
+import org.career.navigator.controller.RoleController;
 import org.career.navigator.security.JWTService;
 import org.career.navigator.repository.InMemoryUserRepository;
 import org.career.navigator.repository.UserRepository;
@@ -320,34 +313,9 @@ public class Main {
                     )
             );
         });
-        // Статистика вакансий по роли (перенесено из vacancy-stats)
-        SkillCatalog skillCatalog = new SkillCatalog();
-        TrudvsemClient trudvsemClient = new TrudvsemClient(skillCatalog);
-        RoleRepository roleRepository = new RoleRepository();
-        StatsService statsService = new StatsService();
-        Map<Long, List<Vacancy>> vacancyCache = new ConcurrentHashMap<>();
 
-        get("/roles/:id/stats", (request, response) -> {
-            long id;
-            try {
-                id = Long.parseLong(request.params(":id"));
-            } catch (NumberFormatException e) {
-                response.status(400);
-                return gson.toJson(Map.of("message", "Role id must be a number"));
-            }
-
-            Role role = roleRepository.findById(id);
-            if (role == null) {
-                response.status(404);
-                return gson.toJson(Map.of("message", "Role not found"));
-            }
-
-            if (!vacancyCache.containsKey(id)) {
-                vacancyCache.put(id, trudvsemClient.search(role.getName(), 100));
-            }
-            return gson.toJson(statsService.compute(role, vacancyCache.get(id)));
-        });
-
+        // Роли, статистика вакансий и словарь синонимов
+        new RoleController(gson).registerRoutes();
 
         awaitInitialization();
 

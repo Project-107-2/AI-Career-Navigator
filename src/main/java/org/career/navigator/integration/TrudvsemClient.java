@@ -1,9 +1,9 @@
 package org.career.navigator.integration;
-import org.career.navigator.repository.SkillCatalog;
-import org.career.navigator.model.Vacancy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.career.navigator.model.Vacancy;
+import org.career.navigator.repository.SkillCatalog;
 
 import java.io.IOException;
 import java.net.URI;
@@ -13,7 +13,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Клиент открытого API «Работа России» (trudvsem.ru). Ключ не нужен. */
 public class TrudvsemClient {
@@ -33,6 +35,23 @@ public class TrudvsemClient {
         String q = URLEncoder.encode(text, StandardCharsets.UTF_8);
         String body = get("/vacancies?text=" + q + "&offset=0&limit=" + limit);
         return parse(body);
+    }
+
+    /** Ищет вакансии по списку синонимичных запросов роли и убирает дубли по id. */
+    public List<Vacancy> searchAll(List<String> queries, int limitPerQuery)
+            throws IOException, InterruptedException {
+        Map<String, Vacancy> unique = new LinkedHashMap<>();
+        for (String query : queries) {
+            if (query == null || query.isBlank()) {
+                continue;
+            }
+            for (Vacancy v : search(query, limitPerQuery)) {
+                if (v.id() != null && !v.id().isBlank()) {
+                    unique.putIfAbsent(v.id(), v);
+                }
+            }
+        }
+        return new ArrayList<>(unique.values());
     }
 
     /** Разбор ответа отдельно от сети — так его удобно проверять на сохранённом JSON. */
