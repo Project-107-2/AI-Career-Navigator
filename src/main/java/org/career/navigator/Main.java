@@ -14,6 +14,7 @@ import org.career.navigator.repository.UserRepository;
 import org.career.navigator.model.User;
 import org.career.navigator.dto.RegisterRequest;
 import org.career.navigator.dto.LoginRequest;
+import org.career.navigator.service.SkillGraphService;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -361,7 +362,12 @@ public class Main {
         });
 
 
-        awaitInitialization();
+
+        // Граф навыков: вершины — навыки, рёбра — что учить раньше чего
+        SkillGraphService skillGraphService = new SkillGraphService(skillCatalog);
+
+        get("/skills/graph", (request, response) ->
+          gson.toJson(skillGraphService.graph()));awaitInitialization();
 
         System.out.println(
                 "Server started on http://localhost:4567"
