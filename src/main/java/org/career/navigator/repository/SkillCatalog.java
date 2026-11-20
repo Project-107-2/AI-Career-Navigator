@@ -1,7 +1,12 @@
 package org.career.navigator.repository;
 
+import org.career.navigator.Database;
 import org.career.navigator.model.Skill;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,13 +15,79 @@ import java.util.Optional;
 
 /**
  * Справочник навыков и их синонимов.
- * Исходные ID 1..14 сохранены без изменений для обратной совместимости.
+ * В рабочем режиме загружается из таблиц PostgreSQL (skills + skill_synonyms) через JDBC,
+ * а конструктор по умолчанию сохраняет встроенный набор для оффлайн unit-тестов.
  */
 public class SkillCatalog {
   private final Map<Long, Skill> skillsById = new LinkedHashMap<>();
-  private final SynonymDictionary dictionary = new SynonymDictionary();
+  private SynonymDictionary dictionary = new SynonymDictionary();
+  private final boolean backedByDatabase;
 
+  /** Загружает справочник навыков и словарь синонимов напрямую из PostgreSQL. */
+  public static SkillCatalog fromDatabase() throws SQLException {
+    SkillCatalog catalog = new SkillCatalog(true);
+    catalog.reloadFromDatabase();
+    return catalog;
+  }
+
+  private SkillCatalog(boolean backedByDatabase) {
+    this.backedByDatabase = backedByDatabase;
+  }
+
+  /** Конструктор со встроенным справочником (для оффлайн unit-тестов). */
   public SkillCatalog() {
+    this.backedByDatabase = false;
+    registerDefaults();
+  }
+
+  /** Перечитывает таблицы skills и skill_synonyms из PostgreSQL и перекомпилирует словарь синонимов. */
+  public synchronized void reloadFromDatabase() throws SQLException {
+    Map<Long, Skill> loadedSkills = new LinkedHashMap<>();
+    Map<Long, List<String>> loadedSynonyms = new LinkedHashMap<>();
+
+    String skillsSql = "SELECT id, name, description FROM skills ORDER BY id";
+    String synonymsSql = "SELECT skill_id, synonym FROM skill_synonyms ORDER BY id";
+
+    try (Connection connection = Database.connect()) {
+      try (PreparedStatement statement = connection.prepareStatement(skillsSql);
+           ResultSet rs = statement.executeQuery()) {
+        while (rs.next()) {
+          long id = rs.getLong("id");
+          String name = rs.getString("name");
+          String description = rs.getString("description");
+          loadedSkills.put(id, new Skill(id, name, description));
+          loadedSynonyms.put(id, new ArrayList<>());
+        }
+      }
+
+      try (PreparedStatement statement = connection.prepareStatement(synonymsSql);
+           ResultSet rs = statement.executeQuery()) {
+        while (rs.next()) {
+          long skillId = rs.getLong("skill_id");
+          String synonym = rs.getString("synonym");
+          List<String> list = loadedSynonyms.get(skillId);
+          if (list != null && synonym != null && !synonym.isBlank()) {
+            list.add(synonym);
+          }
+        }
+      }
+    }
+
+    SynonymDictionary rebuilt = new SynonymDictionary();
+    for (Skill skill : loadedSkills.values()) {
+      rebuilt.register(skill.getId(), skill.getName(), loadedSynonyms.get(skill.getId()));
+    }
+
+    skillsById.clear();
+    skillsById.putAll(loadedSkills);
+    this.dictionary = rebuilt;
+  }
+
+  public boolean isBackedByDatabase() {
+    return backedByDatabase;
+  }
+
+  private void registerDefaults() {
     // --- Базовые Java / Backend (ID 1..14 сохранены) ---
     register(1L, "Java", "Язык программирования Java",
         List.of("java core", "java se", "java ee", "jakarta ee", "jdk", "jvm", "джава", "ява"));

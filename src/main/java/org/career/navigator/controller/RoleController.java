@@ -1,15 +1,20 @@
 package org.career.navigator.controller;
 
 import com.google.gson.Gson;
+import org.career.navigator.Database;
 import org.career.navigator.integration.TrudvsemClient;
 import org.career.navigator.model.Role;
 import org.career.navigator.model.RoleSkill;
 import org.career.navigator.model.Skill;
+import org.career.navigator.repository.PostgresVacancyRepository;
 import org.career.navigator.repository.RoleRepository;
 import org.career.navigator.repository.SkillCatalog;
+import org.career.navigator.repository.VacancyStorage;
 import org.career.navigator.service.StatsService;
 import org.career.navigator.service.VacancySyncScheduler;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,7 +24,10 @@ import java.util.Optional;
 import static spark.Spark.get;
 import static spark.Spark.post;
 
-/** Эндпоинты ролей, статистики вакансий, планировщика обновлений и словаря синонимов навыков. */
+/**
+ * Эндпоинты ролей, статистики вакансий, планировщика обновлений и словаря синонимов навыков.
+ * Работает напрямую с PostgreSQL 18 через JDBC (Database.connect()).
+ */
 public class RoleController {
   private static final String JSON_UTF8 = "application/json; charset=UTF-8";
 
@@ -30,11 +38,30 @@ public class RoleController {
 
   public RoleController(Gson gson) {
     this.gson = gson;
-    this.skillCatalog = new SkillCatalog();
-    TrudvsemClient trudvsemClient = new TrudvsemClient(skillCatalog);
-    this.roleRepository = new RoleRepository(skillCatalog);
-    StatsService statsService = new StatsService();
-    this.scheduler = new VacancySyncScheduler(roleRepository, trudvsemClient, statsService);
+    try (Connection connection = Database.connect()) {
+      if (!connection.isValid(3)) {
+        throw new IllegalStateException("PostgreSQL connection validation failed");
+      }
+      this.skillCatalog = SkillCatalog.fromDatabase();
+      this.roleRepository = RoleRepository.fromDatabase(skillCatalog);
+      VacancyStorage vacancyStorage = new PostgresVacancyRepository();
+      TrudvsemClient trudvsemClient = new TrudvsemClient(skillCatalog);
+      StatsService statsService = new StatsService();
+      this.scheduler =
+          new VacancySyncScheduler(roleRepository, trudvsemClient, statsService, vacancyStorage);
+
+      System.out.println(
+          "[PostgreSQL] Connected: loaded "
+              + skillCatalog.all().size()
+              + " skills and "
+              + roleRepository.findAll().size()
+              + " roles from database");
+    } catch (SQLException e) {
+      throw new IllegalStateException(
+          "Cannot connect to PostgreSQL. Make sure Docker container 'career-postgres' is running "
+              + "and DB_PASSWORD (or .env) is configured.",
+          e);
+    }
   }
 
   public void registerRoutes() {
@@ -42,7 +69,7 @@ public class RoleController {
     scheduler.start();
     Runtime.getRuntime().addShutdownHook(new Thread(scheduler::stop));
 
-    // Список всех ролей по APIContract: {"roles": [...]} (опционально ?category=Backend)
+    // Список всех ролей из PostgreSQL: {"roles": [...]} (опционально ?category=Backend)
     get("/roles", (request, response) -> {
       response.type(JSON_UTF8);
       String category = request.queryParams("category");
@@ -63,19 +90,19 @@ public class RoleController {
       return gson.toJson(Map.of("roles", payload));
     });
 
-    // Детали роли и требуемые навыки по APIContract: GET /roles/{id}
+    // Детали роли и требуемые навыки из PostgreSQL: GET /roles/{id}
     get("/roles/:id", (request, response) -> {
       response.type(JSON_UTF8);
       Long id = parseRoleId(request.params(":id"));
       if (id == null) {
         response.status(400);
-        return gson.toJson(Map.of("message", "Role id must be a number"));
+        return gson.toJson(Map.of("error", "INVALID_ROLE_ID", "message", "Role id must be a number"));
       }
 
       Role role = roleRepository.findById(id);
       if (role == null) {
         response.status(404);
-        return gson.toJson(Map.of("message", "Role not found"));
+        return gson.toJson(Map.of("error", "ROLE_NOT_FOUND", "message", "Role not found"));
       }
 
       List<Map<String, Object>> roleSkills = new ArrayList<>();
@@ -97,37 +124,37 @@ public class RoleController {
       return gson.toJson(result);
     });
 
-    // Статистика вакансий по роли (из кэша планировщика или с дозагрузкой)
+    // Статистика вакансий по роли (из снимков PostgreSQL или с дозагрузкой с trudvsem.ru)
     get("/roles/:id/stats", (request, response) -> {
       response.type(JSON_UTF8);
       Long id = parseRoleId(request.params(":id"));
       if (id == null) {
         response.status(400);
-        return gson.toJson(Map.of("message", "Role id must be a number"));
+        return gson.toJson(Map.of("error", "INVALID_ROLE_ID", "message", "Role id must be a number"));
       }
 
       Role role = roleRepository.findById(id);
       if (role == null) {
         response.status(404);
-        return gson.toJson(Map.of("message", "Role not found"));
+        return gson.toJson(Map.of("error", "ROLE_NOT_FOUND", "message", "Role not found"));
       }
 
       return gson.toJson(scheduler.getOrFetchStats(role));
     });
 
-    // История снимков статистики по датам для роли (заготовка под тренды и «рост за год»)
+    // История снимков статистики по датам из PostgreSQL (таблицы role_stats_snapshots)
     get("/roles/:id/history", (request, response) -> {
       response.type(JSON_UTF8);
       Long id = parseRoleId(request.params(":id"));
       if (id == null) {
         response.status(400);
-        return gson.toJson(Map.of("message", "Role id must be a number"));
+        return gson.toJson(Map.of("error", "INVALID_ROLE_ID", "message", "Role id must be a number"));
       }
 
       Role role = roleRepository.findById(id);
       if (role == null) {
         response.status(404);
-        return gson.toJson(Map.of("message", "Role not found"));
+        return gson.toJson(Map.of("error", "ROLE_NOT_FOUND", "message", "Role not found"));
       }
 
       Map<String, Object> result = new LinkedHashMap<>();
@@ -137,7 +164,7 @@ public class RoleController {
       return gson.toJson(result);
     });
 
-    // Статус фонового расписания обновления вакансий
+    // Статус фонового расписания обновления вакансий и счётчики из PostgreSQL
     get("/sync/status", (request, response) -> {
       response.type(JSON_UTF8);
       return gson.toJson(scheduler.getStatus());
@@ -152,7 +179,7 @@ public class RoleController {
           "message", started ? "Background sync started" : "Sync is already running"));
     });
 
-    // Справочник всех навыков вместе со списком синонимов
+    // Справочник всех навыков из PostgreSQL вместе со списком синонимов
     get("/skills/catalog", (request, response) -> {
       response.type(JSON_UTF8);
       List<Map<String, Object>> items = new ArrayList<>();
@@ -173,12 +200,14 @@ public class RoleController {
       String q = request.queryParams("q");
       if (q == null || q.isBlank()) {
         response.status(400);
-        return gson.toJson(Map.of("message", "Query parameter 'q' is required"));
+        return gson.toJson(
+            Map.of("error", "MISSING_QUERY", "message", "Query parameter 'q' is required"));
       }
       Optional<Skill> skill = skillCatalog.normalize(q);
       if (skill.isEmpty()) {
         response.status(404);
-        return gson.toJson(Map.of("message", "Skill not found in synonym dictionary"));
+        return gson.toJson(
+            Map.of("error", "SKILL_NOT_FOUND", "message", "Skill not found in synonym dictionary"));
       }
       return gson.toJson(skill.get());
     });

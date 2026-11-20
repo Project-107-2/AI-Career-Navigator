@@ -4,16 +4,17 @@ import org.career.navigator.dto.RoleStats;
 import org.career.navigator.integration.TrudvsemClient;
 import org.career.navigator.model.Role;
 import org.career.navigator.model.Vacancy;
+import org.career.navigator.repository.InMemoryVacancyStorage;
 import org.career.navigator.repository.RoleRepository;
+import org.career.navigator.repository.VacancyStorage;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -21,7 +22,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Фоновый планировщик обновления вакансий и рыночной статистики с trudvsem.ru по расписанию.
- * Хранит актуальный кэш и ежедневные снимки статистики по ролям (готово к переносу в PostgreSQL).
+ * Сохраняет собранные вакансии и ежедневные снимки статистики через VacancyStorage
+ * (в рабочем режиме — PostgreSQL 18 через JDBC).
  */
 public class VacancySyncScheduler {
 
@@ -37,13 +39,10 @@ public class VacancySyncScheduler {
   private final RoleRepository roleRepository;
   private final StatsService statsService;
   private final VacancyFetcher fetcher;
+  private final VacancyStorage storage;
   private final long initialDelayMs;
   private final long intervalMs;
   private final long pauseBetweenRolesMs;
-
-  private final Map<Long, List<Vacancy>> vacancyCache = new ConcurrentHashMap<>();
-  private final Map<Long, RoleStats> statsCache = new ConcurrentHashMap<>();
-  private final Map<Long, Map<String, RoleStats>> dailySnapshots = new ConcurrentHashMap<>();
 
   private final AtomicBoolean syncing = new AtomicBoolean(false);
   private volatile Instant lastSyncStartedAt;
@@ -54,14 +53,23 @@ public class VacancySyncScheduler {
   public VacancySyncScheduler(
       RoleRepository roleRepository,
       TrudvsemClient trudvsemClient,
-      StatsService statsService) {
+      StatsService statsService,
+      VacancyStorage storage) {
     this(
         roleRepository,
         statsService,
         role -> trudvsemClient.searchAll(role.getSearchQueries(), 50),
+        storage,
         DEFAULT_INITIAL_DELAY_MS,
         TimeUnit.HOURS.toMillis(resolveIntervalHours()),
         DEFAULT_PAUSE_BETWEEN_ROLES_MS);
+  }
+
+  public VacancySyncScheduler(
+      RoleRepository roleRepository,
+      TrudvsemClient trudvsemClient,
+      StatsService statsService) {
+    this(roleRepository, trudvsemClient, statsService, new InMemoryVacancyStorage());
   }
 
   public VacancySyncScheduler(
@@ -71,9 +79,28 @@ public class VacancySyncScheduler {
       long initialDelayMs,
       long intervalMs,
       long pauseBetweenRolesMs) {
+    this(
+        roleRepository,
+        statsService,
+        fetcher,
+        new InMemoryVacancyStorage(),
+        initialDelayMs,
+        intervalMs,
+        pauseBetweenRolesMs);
+  }
+
+  public VacancySyncScheduler(
+      RoleRepository roleRepository,
+      StatsService statsService,
+      VacancyFetcher fetcher,
+      VacancyStorage storage,
+      long initialDelayMs,
+      long intervalMs,
+      long pauseBetweenRolesMs) {
     this.roleRepository = roleRepository;
     this.statsService = statsService;
     this.fetcher = fetcher;
+    this.storage = storage;
     this.initialDelayMs = initialDelayMs;
     this.intervalMs = intervalMs;
     this.pauseBetweenRolesMs = pauseBetweenRolesMs;
@@ -119,7 +146,7 @@ public class VacancySyncScheduler {
     return true;
   }
 
-  /** Обходит все роли, скачивает свежие вакансии, пересчитывает статистику и сохраняет снимок за сегодня. */
+  /** Обходит все роли, скачивает свежие вакансии, пересчитывает статистику и сохраняет в хранилище. */
   public void syncAllNow() {
     if (!syncing.compareAndSet(false, true)) {
       return;
@@ -140,7 +167,7 @@ public class VacancySyncScheduler {
         } catch (Exception e) {
           errors++;
           System.err.println(
-              "[VacancySyncScheduler] Ошибка обновления роли "
+              "[VacancySyncScheduler] Error syncing role "
                   + role.getName() + ": " + e.getMessage());
         }
         if (pauseBetweenRolesMs > 0) {
@@ -159,33 +186,29 @@ public class VacancySyncScheduler {
     }
   }
 
-  /** Возвращает статистику из кэша или сразу загружает роль, если фоновый проход до неё ещё не дошёл. */
+  /** Возвращает последний снимок из хранилища (БД) или сразу загружает роль с trudvsem.ru. */
   public RoleStats getOrFetchStats(Role role) throws IOException, InterruptedException {
-    RoleStats cached = statsCache.get(role.getId());
-    if (cached != null) {
-      return cached;
+    Optional<RoleStats> cached = storage.findLatestSnapshot(role.getId());
+    if (cached.isPresent()) {
+      return cached.get();
     }
     return syncRole(role);
   }
 
   /** Возвращает историю снимков статистики по датам (YYYY-MM-DD -> RoleStats). */
   public Map<String, RoleStats> getDailySnapshots(Long roleId) {
-    Map<String, RoleStats> history = dailySnapshots.get(roleId);
-    if (history == null) {
-      return Collections.emptyMap();
-    }
-    return Collections.unmodifiableMap(new LinkedHashMap<>(history));
+    return storage.findDailySnapshots(roleId);
   }
 
   /** Статус планировщика в формате, безопасном для прямой сериализации через Gson. */
   public Map<String, Object> getStatus() {
-    int totalVacancies = vacancyCache.values().stream().mapToInt(List::size).sum();
     Map<String, Object> status = new LinkedHashMap<>();
+    status.put("storage", storage.storageName());
     status.put("syncingNow", syncing.get());
     status.put("intervalSeconds", TimeUnit.MILLISECONDS.toSeconds(intervalMs));
     status.put("totalRoles", roleRepository.findAll().size());
-    status.put("cachedRoles", statsCache.size());
-    status.put("totalVacanciesCached", totalVacancies);
+    status.put("cachedRoles", storage.countCachedRoles());
+    status.put("totalVacanciesCached", storage.countTotalVacancies());
     status.put("lastSyncStartedAt", lastSyncStartedAt == null ? null : lastSyncStartedAt.toString());
     status.put("lastSyncFinishedAt", lastSyncFinishedAt == null ? null : lastSyncFinishedAt.toString());
     status.put("lastSyncErrors", lastSyncErrors);
@@ -195,12 +218,8 @@ public class VacancySyncScheduler {
   private RoleStats syncRole(Role role) throws IOException, InterruptedException {
     List<Vacancy> vacancies = fetcher.fetch(role);
     RoleStats computed = statsService.compute(role, vacancies);
-    vacancyCache.put(role.getId(), vacancies);
-    statsCache.put(role.getId(), computed);
-    String today = LocalDate.now().toString();
-    dailySnapshots
-        .computeIfAbsent(role.getId(), ignored -> new ConcurrentHashMap<>())
-        .put(today, computed);
+    storage.saveVacancies(role.getId(), "trudvsem", vacancies);
+    storage.saveSnapshot(role.getId(), LocalDate.now(), computed);
     return computed;
   }
 

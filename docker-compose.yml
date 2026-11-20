@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: career-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-career_navigator}
+      POSTGRES_USER: ${POSTGRES_USER:-career}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - career_pgdata:/var/lib/postgresql
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    profiles: ["full"]
+    build: .
+    container_name: career-backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-career_navigator}
+      DB_USER: ${POSTGRES_USER:-career}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+    ports:
+      - "127.0.0.1:4567:4567"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  career_pgdata:
