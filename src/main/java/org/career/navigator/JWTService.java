@@ -12,14 +12,11 @@ public class JWTService {
     private final Algorithm algorithm;
 
     public JWTService() {
-        algorithm = Algorithm.HMAC256("career-navigator-secret");
+        algorithm = Algorithm.HMAC256(Database.required("JWT_SECRET"));
     }
 
     public String createToken(String email) {
-        Date expiration = new Date(
-                System.currentTimeMillis() + 60 * 60 * 1000
-        );
-
+        Date expiration = new Date(System.currentTimeMillis() + 60 * 60 * 1000);
         return JWT.create()
                 .withSubject(email)
                 .withExpiresAt(expiration)
@@ -29,14 +26,9 @@ public class JWTService {
     public String getEmail(String token) {
         try {
             JWTVerifier verifier = JWT.require(algorithm).build();
-
-            return verifier
-                    .verify(token)
-                    .getSubject();
-
+            return verifier.verify(token).getSubject();
         } catch (JWTVerificationException exception) {
             return null;
         }
     }
 }
-
